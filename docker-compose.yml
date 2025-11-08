@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: apache/ranger-zk:${RANGER_VERSION}
+    container_name: ranger-zk
+    hostname: ranger-zk.example.com
+    networks:
+      - rangernw
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD-SHELL", "echo mntr | nc localhost 2181 | grep ZooKeeper"]
+      interval: 10s
+      timeout: 2s
+      retries: 30
+
+  ranger-solr:
+    image: apache/ranger-solr:${RANGER_VERSION}
+    container_name: ranger-solr
+    hostname: ranger-solr.example.com
+    networks:
+      - rangernw
+    ports:
+      - "8983:8983"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8983/solr || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 30
+      start_period: 15s
+    command: ["sh", "-c", "solr-precreate ranger_audits /opt/solr/server/solr/configsets/ranger_audits/ && tail -f /dev/null"]
+
+  ranger-db:
+    image: apache/ranger-db:${RANGER_VERSION}
+    container_name: ranger-db
+    hostname: ranger-db.example.com
+    networks:
+      - rangernw
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 2s
+      retries: 30
+
+  ranger-admin:
+    image: apache/ranger:${RANGER_VERSION}
+    container_name: ranger
+    hostname: ranger.example.com
+    networks:
+      - rangernw
+    environment:
+      - RANGER_VERSION=${RANGER_VERSION}
+      - RANGER_DB_TYPE=postgres
+      - RANGER_ADMIN_PASSWORD=rangerR0cks!
+      - DB_root_user=postgres
+      - DB_root_password=
+      - DB_host=ranger-db
+      - DB_port=5432
+      - DB_name=rangerdb
+      - DB_user=rangeruser
+      - DB_password=rangerpass
+      - DB_url=jdbc:postgresql://ranger-db:5432/rangerdb
+    ports:
+      - "6080:6080"
+    depends_on:
+      ranger-db:
+        condition: service_healthy
+      ranger-solr:
+        condition: service_healthy
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+      start_period: 180s
+    command: >
+      sh -c "
+        echo 'Waiting for Ranger to start...' &&
+        /home/ranger/scripts/ranger.sh &&
+        sleep 30 &&
+        tail -f /opt/ranger/admin/ews/logs/*.log
+      "
+
+networks:
+  rangernw:

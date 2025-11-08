@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   zookeeper:
-    image: apache/ranger-zk:${RANGER_VERSION}
+    image: apache/ranger-zk:2.7.0
     container_name: ranger-zk
     hostname: ranger-zk.example.com
     networks:
@@ -16,7 +16,7 @@ services:
       retries: 30
 
   ranger-solr:
-    image: apache/ranger-solr:${RANGER_VERSION}
+    image: apache/ranger-solr:2.7.0
     container_name: ranger-solr
     hostname: ranger-solr.example.com
     networks:
@@ -35,7 +35,7 @@ services:
     command: ["sh", "-c", "solr-precreate ranger_audits /opt/solr/server/solr/configsets/ranger_audits/ && tail -f /dev/null"]
 
   ranger-db:
-    image: apache/ranger-db:${RANGER_VERSION}
+    image: apache/ranger-db:2.7.0
     container_name: ranger-db
     hostname: ranger-db.example.com
     networks:
@@ -47,13 +47,13 @@ services:
       retries: 30
 
   ranger-admin:
-    image: apache/ranger:${RANGER_VERSION}
+    image: apache/ranger:2.7.0
     container_name: ranger
     hostname: ranger.example.com
     networks:
       - rangernw
     environment:
-      - RANGER_VERSION=${RANGER_VERSION}
+      - RANGER_VERSION=2.7.0
       - RANGER_DB_TYPE=postgres
       - RANGER_ADMIN_PASSWORD=rangerR0cks!
       - DB_root_user=postgres

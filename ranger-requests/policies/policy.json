@@ -1,0 +1,23 @@
+{
+  "name": "minio-bucket-policy",
+  "description": "Access to entire bucket",
+  "service": "minio-service",
+  "isEnabled": true,
+  "resources": {
+    "bucket": {
+      "values": ["analytics"],
+      "isExcludes": false,
+      "isRecursive": false
+    }
+  },
+  "policyItems": [
+    {
+      "users": ["user1"],
+      "accesses": [
+        {"type": "read", "isAllowed": true},
+        {"type": "write", "isAllowed": true},
+        {"type": "list", "isAllowed": true}
+      ]
+    }
+  ]
+}

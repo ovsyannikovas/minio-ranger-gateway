@@ -1,0 +1,8 @@
+{
+  "name": "minio-service",
+  "type": "minio-service-def",
+  "configs": {
+    "minioEndpoint": "http://minio:9000"
+  },
+  "description": "MinIO authorization policies"
+}

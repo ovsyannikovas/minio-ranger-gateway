@@ -1,0 +1,13 @@
+{
+    "name": "user1",
+    "loginId": "user1",
+    "firstName": "User",
+    "lastName": "One",
+    "emailAddress": "user1@example.com",
+    "password": "rangerR0cks!",
+    "userRoleList": ["ROLE_USER"],
+    "userSource": 0,
+    "status": 1,
+    "isVisible": 1,
+    "userRoleList": ["ROLE_USER"]
+}

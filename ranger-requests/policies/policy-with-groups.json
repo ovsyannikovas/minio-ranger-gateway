@@ -1,0 +1,23 @@
+{
+  "name": "minio-group-policy",
+  "description": "Access to bucket via groups",
+  "service": "minio-service",
+  "isEnabled": true,
+  "resources": {
+    "bucket": {
+      "values": ["analytics"],
+      "isExcludes": false,
+      "isRecursive": false
+    }
+  },
+  "policyItems": [
+    {
+      "groups": ["analysts", "data-scientists"],
+      "accesses": [
+        {"type": "read", "isAllowed": true},
+        {"type": "list", "isAllowed": true}
+      ]
+    }
+  ]
+}
+

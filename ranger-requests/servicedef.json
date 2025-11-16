@@ -1,0 +1,48 @@
+{
+  "id": 0,
+  "name": "minio-service-def",
+  "label": "MinIO",
+  "description": "Custom service definition for controlling access to MinIO via Apache Ranger",
+  "options": {},
+  "configs": [],
+  "resources": [
+    {
+      "itemId": 1,
+      "name": "bucket",
+      "type": "string",
+      "level": 1,
+      "isExcludesSupported": true,
+      "isRecursiveSupported": false,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "validationRegEx": "^[a-zA-Z0-9_.-]+$",
+      "validationMessage": "Bucket name should contain only letters, numbers, dots, underscores and hyphens",
+      "uiHint": "Bucket name (e.g. analytics, logs, backups)",
+      "label": "Bucket"
+    },
+    {
+      "itemId": 2,
+      "name": "object",
+      "type": "string",
+      "level": 2,
+      "isExcludesSupported": true,
+      "isRecursiveSupported": true,
+      "matcher": "org.apache.ranger.plugin.resourcematcher.RangerDefaultResourceMatcher",
+      "validationRegEx": ".*",
+      "validationMessage": "Any valid object key or prefix",
+      "uiHint": "Object path (e.g. data/2024/10/file.csv)",
+      "label": "Object"
+    }
+  ],
+  "accessTypes": [
+    { "itemId": 1, "name": "read", "label": "Read", "impliedGrants": [] },
+    { "itemId": 2, "name": "write", "label": "Write", "impliedGrants": [] },
+    { "itemId": 3, "name": "delete", "label": "Delete", "impliedGrants": [] },
+    { "itemId": 4, "name": "list", "label": "List", "impliedGrants": [] }
+  ],
+  "policyConditions": [],
+  "contextEnrichers": [],
+  "enums": [],
+  "dataMaskDef": null,
+  "rowFilterDef": null,
+  "isEnabled": true
+}

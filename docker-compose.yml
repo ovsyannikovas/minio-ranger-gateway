@@ -110,6 +110,23 @@ services:
       timeout: 20s
       retries: 3
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    hostname: redis.example.com
+    networks:
+      - rangernw
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass redispass123
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   gateway:
     build:
       context: ./full-stack-fastapi-template/backend
@@ -123,6 +140,8 @@ services:
       ranger-admin:
         condition: service_healthy
       minio:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     environment:
       # Ranger configuration
@@ -152,8 +171,28 @@ services:
       fastapi run --host 0.0.0.0 --port 8000 app/main.py
       "
 
+  quickwit:
+    image: quickwit/quickwit:latest
+    container_name: quickwit
+    ports:
+      - "7280:7280"  # UI и REST API
+    environment:
+      - QW_ENABLE_OPENTELEMETRY=false
+      - QW_CLUSTER_ID=quickwit-docker-cluster
+    volumes:
+      - quickwit_data:/quickwit/data
+      - ./qwdata:/quickwit/qwdata
+    command: run
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:7280/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   minio_data:
+  quickwit_data:
+  redis_data:
 
 networks:
   rangernw:

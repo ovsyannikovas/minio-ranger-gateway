@@ -84,6 +84,11 @@ class PolicyMatcher:
         return PolicyMatcher.match_resource(object_path, values, is_excludes, is_recursive)
 
 
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
 class PolicyChecker:
     """Checks authorization against loaded policies."""
 
@@ -110,9 +115,15 @@ class PolicyChecker:
         Returns:
             Tuple of (is_allowed, is_audited)
         """
+        logger.debug(f"Starting policy check: user={user}, groups={user_groups}, bucket={bucket}, object={object_path}, access={access_type}")
+
         # Check each policy
-        for policy in policies:
+        for i, policy in enumerate(policies):
+            policy_name = policy.get("name", f"UnnamedPolicy-{i}")
+            logger.debug(f"Checking policy [{i}]: {policy_name}")
+
             if not policy.get("isEnabled", True):
+                logger.debug(f"Policy {policy_name} is disabled, skipping.")
                 continue
 
             # Check if policy resources match
@@ -121,51 +132,76 @@ class PolicyChecker:
             policy_object = policy_resources.get("object")
 
             if policy_bucket is None:
+                logger.debug(f"Policy {policy_name} has no bucket resource, skipping.")
                 continue
 
             # Check bucket match
             if not PolicyMatcher.match_bucket(bucket, policy_bucket):
+                logger.debug(f"Bucket '{bucket}' does not match policy {policy_name}.")
                 continue
+            else:
+                logger.debug(f"Bucket '{bucket}' matches policy {policy_name}.")
 
             # Check object match (if object_path is provided)
             if object_path is not None:
                 if not PolicyMatcher.match_object(object_path, policy_object):
+                    logger.debug(f"Object '{object_path}' does not match policy {policy_name}.")
                     continue
+                else:
+                    logger.debug(f"Object '{object_path}' matches policy {policy_name}.")
             else:
-                # For bucket-level operations, object policy should not restrict
-                # (or should be None/empty)
-                if policy_object and policy_object.get("values"):
-                    # Policy has object restrictions, but request is bucket-level
-                    # This might be a mismatch, but we'll allow if bucket matches
-                    pass
+                logger.debug(f"No object path provided. Checking bucket-level access for policy {policy_name}.")
 
             # Check if user or group matches
             policy_items = policy.get("policyItems", [])
-            for policy_item in policy_items:
-                # Check users
+            logger.debug(f"Policy {policy_name} has {len(policy_items)} policy items.")
+
+            matched = False
+            for j, policy_item in enumerate(policy_items):
                 policy_users = policy_item.get("users", [])
-                user_match = user in policy_users if policy_users else False
-
-                # Check groups
                 policy_groups = policy_item.get("groups", [])
-                # If policy has groups and user has groups, check if any match
-                if policy_groups and user_groups:
-                    group_match = any(group in policy_groups for group in user_groups)
-                else:
-                    group_match = False
 
-                # User must match either by name OR by group membership
+                user_match = user in policy_users if policy_users else False
+                group_match = (
+                    any(group in policy_groups for group in user_groups)
+                    if policy_groups and user_groups
+                    else False
+                )
+
+                logger.debug(
+                    f"Policy item [{j}]: users={policy_users}, groups={policy_groups}, "
+                    f"user_match={user_match}, group_match={group_match}"
+                )
+
                 if not (user_match or group_match):
                     continue
 
                 # Check access type
                 accesses = policy_item.get("accesses", [])
-                for access in accesses:
-                    if access.get("type") == access_type and access.get("isAllowed", False):
-                        # Match found! Check if audited
+                logger.debug(f"Checking accesses: {accesses}")
+
+                for k, access in enumerate(accesses):
+                    access_type_match = access.get("type") == access_type
+                    is_allowed = access.get("isAllowed", False)
+                    logger.debug(
+                        f"Access [{k}]: type={access.get('type')}, allowed={is_allowed}, "
+                        f"type_match={access_type_match}"
+                    )
+
+                    if access_type_match and is_allowed:
                         is_audited = policy.get("isAuditEnabled", True)
+                        logger.info(
+                            f"✅ ACCESS GRANTED by policy '{policy_name}': "
+                            f"user={user}, bucket={bucket}, object={object_path}, access={access_type}, audited={is_audited}"
+                        )
                         return True, is_audited
 
-        # No matching policy found - deny by default
+            if not matched:
+                logger.debug(f"No matching access found in policy {policy_name}.")
+
+        logger.warning(
+            f"❌ ACCESS DENIED: No matching policy found for "
+            f"user={user}, bucket={bucket}, object={object_path}, access={access_type}"
+        )
         return False, False
 

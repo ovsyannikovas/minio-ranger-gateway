@@ -2,6 +2,8 @@
 
 import logging
 from typing import Any
+import redis.asyncio as redis
+import re
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import StreamingResponse
@@ -34,6 +36,26 @@ def get_minio_client() -> httpx.AsyncClient:
     return _minio_client
 
 
+redis_client = redis.Redis(host="redis", port=6379, db=0, password='redispass123')
+
+async def get_user_from_access_key(request: Request) -> str:
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    match = re.search(r"Credential=([^/]+)/", auth_header)
+    if not match:
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+
+    access_key = match.group(1)
+
+    user = await redis_client.get(access_key)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid access key")
+
+    return user.decode("utf-8")
+
+
 @router.api_route("/{path:path}", methods=["GET", "PUT", "POST", "DELETE", "HEAD"])
 async def proxy_to_minio(
     request: Request,
@@ -48,9 +70,10 @@ async def proxy_to_minio(
     3. If allowed, proxies the request to MinIO
     4. Returns the response from MinIO
     """
-    # Extract user from request (for now, from header or query param)
-    # TODO: Implement proper authentication (AWS Signature, JWT, etc.)
-    user = request.headers.get("X-User", "admin")
+    try:
+        user = await get_user_from_access_key(request)
+    except HTTPException as e:
+        return Response(content=e.detail, status_code=e.status_code)
     
     # Get user groups from Ranger UserSync
     # Fallback to header if Ranger is unavailable or user not found
@@ -110,12 +133,10 @@ async def proxy_to_minio(
         url = f"/{path}"
         headers = dict(request.headers)
         # Remove gateway-specific headers
-        headers.pop("host", None)
-        headers.pop("X-User", None)
-        headers.pop("X-User-Groups", None)
+        # headers["host"] = "minio:9000"
 
         # Get request body if present
-        body = await request.body() if request.method in ("PUT", "POST") else None
+        body = await request.body()
 
         # Forward request to MinIO
         response = await minio_client.request(

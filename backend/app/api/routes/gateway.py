@@ -5,7 +5,7 @@ from typing import Any
 import redis.asyncio as redis
 import re
 
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status, Depends
 from fastapi.responses import StreamingResponse
 import httpx
 
@@ -16,81 +16,51 @@ from app.gateway.authorizer import (
     map_http_method_to_access_type,
 )
 from app.gateway.user_groups import get_user_groups_from_ranger
+from app.gateway.solr_logger import SolrLoggerClient
+from app.gateway.ranger_client import RangerClient
+from app.utils import get_user_from_access_key
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# HTTP client for proxying to MinIO
-_minio_client: httpx.AsyncClient | None = None
-
-
-def get_minio_client() -> httpx.AsyncClient:
-    """Get or create MinIO HTTP client."""
-    global _minio_client
-    if _minio_client is None:
-        _minio_client = httpx.AsyncClient(
-            base_url=settings.MINIO_ENDPOINT,
-            timeout=60.0,
-        )
-    return _minio_client
-
-
-redis_client = redis.Redis(host="redis", port=6379, db=0, password='redispass123')
-
-async def get_user_from_access_key(request: Request) -> str:
-    auth_header = request.headers.get("Authorization")
-    if not auth_header:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-
-    match = re.search(r"Credential=([^/]+)/", auth_header)
-    if not match:
-        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
-
-    access_key = match.group(1)
-
-    user = await redis_client.get(access_key)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid access key")
-
-    return user.decode("utf-8")
 
 
 @router.api_route("/{path:path}", methods=["GET", "PUT", "POST", "DELETE", "HEAD"])
 async def proxy_to_minio(
     request: Request,
     path: str,
-) -> Response:
+):
     """
-    Proxy S3 requests to MinIO with Ranger authorization.
+    Прокси S3-запросы к MinIO через авторизацию Apache Ranger.
 
-    This endpoint:
-    1. Extracts user, bucket, and object from the request
-    2. Checks authorization with Ranger
-    3. If allowed, proxies the request to MinIO
-    4. Returns the response from MinIO
+    1. Извлечь пользователя и группы
+    2. Проверить разрешения через Ranger
+    3. Если разрешено — проксировать запрос к MinIO
+    4. Вернуть ответ клиента
+    Логгировать действия (аудит) через Solr, если требуется политикой
     """
     try:
-        user = await get_user_from_access_key(request)
+        user = await get_user_from_access_key(request, request.app.state.redis_client)
+        logger.debug(f"Extracted user from access_key: {user}")
     except HTTPException as e:
+        logger.warning(f"Auth failed: {e.detail}")
         return Response(content=e.detail, status_code=e.status_code)
-    
+
+    ranger_client: RangerClient = request.app.state.ranger_client
     # Get user groups from Ranger UserSync
-    # Fallback to header if Ranger is unavailable or user not found
-    user_groups = await get_user_groups_from_ranger(user)
-    if not user_groups:
-        # Fallback: try to get from header if provided
-        user_groups_str = request.headers.get("X-User-Groups", "")
-        user_groups = [g.strip() for g in user_groups_str.split(",") if g.strip()] if user_groups_str else []
+    user_groups = await get_user_groups_from_ranger(ranger_client, user)
+    logger.debug(f"Groups for {user}: {user_groups}")
 
     # Extract bucket and object from path
     bucket, object_path = extract_resource_from_path(path)
+    logger.debug(f"Parsed path: bucket={bucket}, object_path={object_path}")
 
-    if not bucket:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bucket name is required",
-        )
+    # if not bucket:
+    #     logger.error("Bucket name is required")
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="Bucket name is required",
+    #     )
 
     # Map HTTP method to access type
     access_type = map_http_method_to_access_type(request.method)
@@ -100,7 +70,7 @@ async def proxy_to_minio(
         access_type = "list"
 
     # Check authorization
-    is_allowed, is_audited = await check_authorization(
+    is_allowed, is_audited, policy_id = await check_authorization(
         user=user,
         bucket=bucket,
         object_path=object_path,
@@ -113,32 +83,41 @@ async def proxy_to_minio(
             f"Access denied: user={user}, bucket={bucket}, "
             f"object={object_path}, access={access_type}"
         )
+        # TODO тут тоже лог в solr
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied by policy",
         )
+    logger.info(f"Access GRANTED: user={user}, bucket={bucket}, object={object_path}, access={access_type}")
 
-    # Log audit if required
+    # Log audit to Solr if needed
     if is_audited:
-        logger.info(
-            f"Audit: user={user}, bucket={bucket}, "
-            f"object={object_path}, access={access_type}, allowed={is_allowed}"
+        solr_logger: SolrLoggerClient = request.app.state.solr_logger
+        audit_record = solr_logger.build_audit_record(
+            policy=policy_id,
+            policyVersion=1,
+            access=access_type,
+            repo=bucket,
+            repoType=1,
+            sess=request.headers.get("X-Session-Id", ""),
+            reqUser=user,
+            resource=f"/{bucket}/{object_path}" if object_path else f"/{bucket}",
+            cliIP=request.client.host if request.client else "",
+            result=1,
+            agentHost=settings.API_HOST if hasattr(settings, 'API_HOST') else "localhost",
+            action=access_type
         )
+        await solr_logger.log_event(audit_record)
+        logger.debug(f"Audit event logged for user={user}, policy={policy_id}")
 
     # Proxy request to MinIO
     try:
-        minio_client = get_minio_client()
-
-        # Prepare request to MinIO
+        minio_client: httpx.AsyncClient = request.app.state.minio_client
         url = f"/{path}"
         headers = dict(request.headers)
-        # Remove gateway-specific headers
-        # headers["host"] = "minio:9000"
-
         # Get request body if present
         body = await request.body()
 
-        # Forward request to MinIO
         response = await minio_client.request(
             method=request.method,
             url=url,
@@ -146,6 +125,7 @@ async def proxy_to_minio(
             content=body,
         )
 
+        logger.debug(f"Proxied to MinIO: url={url}, status={response.status_code}")
         # Return response from MinIO
         return Response(
             content=response.content,

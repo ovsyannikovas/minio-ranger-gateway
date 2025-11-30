@@ -6,7 +6,8 @@ from typing import Any
 
 from app.core.config import settings
 from app.gateway.cache import set_policies
-from app.gateway.ranger_client import get_ranger_client
+
+from app.gateway.ranger_client import RangerClient
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +16,18 @@ _policy_loader_task: asyncio.Task | None = None
 _loader_running = False
 
 
-async def load_policies(service_name: str | None = None) -> list[dict[str, Any]]:
+async def load_policies(ranger_client: RangerClient, service_name: str | None = None) -> list[dict[str, Any]]:
     """
     Load policies from Ranger for a service.
 
     Args:
+        ranger_client: RangerClient
         service_name: Service name (defaults to config)
 
     Returns:
         List of policy dictionaries
     """
     service = service_name or settings.RANGER_SERVICE_NAME
-    ranger_client = get_ranger_client()
 
     try:
         policies = await ranger_client.get_policies(service)
@@ -38,24 +39,25 @@ async def load_policies(service_name: str | None = None) -> list[dict[str, Any]]
         return []
 
 
-async def policy_loader_loop(interval: int = 300) -> None:
+async def policy_loader_loop(ranger_client: RangerClient, interval: int = 300) -> None:
     """
     Background task that periodically loads policies from Ranger.
 
     Args:
+        ranger_client: RangerClient
         interval: Refresh interval in seconds (default: 5 minutes)
     """
     global _loader_running
     _loader_running = True
 
     # Load immediately on start
-    await load_policies()
+    await load_policies(ranger_client)
 
     # Then load periodically
     while _loader_running:
         try:
             await asyncio.sleep(interval)
-            await load_policies()
+            await load_policies(ranger_client)
         except asyncio.CancelledError:
             logger.info("Policy loader task cancelled")
             break
@@ -65,11 +67,12 @@ async def policy_loader_loop(interval: int = 300) -> None:
             await asyncio.sleep(interval)
 
 
-def start_policy_loader(interval: int | None = None) -> None:
+def start_policy_loader(ranger_client: RangerClient, interval: int | None = None) -> None:
     """
     Start the background policy loader task.
 
     Args:
+        ranger_client: RangerClient
         interval: Refresh interval in seconds (defaults to RANGER_CACHE_TTL)
     """
     global _policy_loader_task
@@ -78,7 +81,7 @@ def start_policy_loader(interval: int | None = None) -> None:
         return
 
     refresh_interval = interval or settings.RANGER_CACHE_TTL
-    _policy_loader_task = asyncio.create_task(policy_loader_loop(refresh_interval))
+    _policy_loader_task = asyncio.create_task(policy_loader_loop(ranger_client, refresh_interval))
     logger.info(f"Started policy loader with interval {refresh_interval}s")
 
 

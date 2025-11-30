@@ -5,8 +5,8 @@ from botocore.client import Config
 
 # Конфигурация
 MINIO_ENDPOINT = "http://gateway:8000"  # Адрес вашего gateway
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "fxx9Ukex7mmnwgYrikaY")
-AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "mfHAKQRybyqszy6As7MwN9lUl7aeN9JshyDQ4Hty")
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "kcUiX3e6EJYfhFOEFqXB")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "2dFcuDNJDfkclLTbueiQDpQHVDcZpFFwpriCDkjx")
 REGION = "us-east-1"
 
 

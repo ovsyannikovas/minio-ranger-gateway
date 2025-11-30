@@ -1,0 +1,29 @@
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.venv/
+venv/
+.mypy_cache/
+.cache/
+.coverage
+htmlcov/
+
+# IDE/project
+.idea/
+.vscode/
+*.iml
+
+# Env/config
+.env
+.env.*
+
+# Migration/db
+alembic/
+migrations/
+
+# Logs
+*.log
+
+# Mac
+.DS_Store

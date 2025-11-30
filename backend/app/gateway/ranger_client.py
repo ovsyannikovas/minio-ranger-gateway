@@ -133,16 +133,3 @@ class RangerClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
-
-
-# Global client instance
-_ranger_client: RangerClient | None = None
-
-
-def get_ranger_client() -> RangerClient:
-    """Get or create global Ranger client instance."""
-    global _ranger_client
-    if _ranger_client is None:
-        _ranger_client = RangerClient()
-    return _ranger_client
-

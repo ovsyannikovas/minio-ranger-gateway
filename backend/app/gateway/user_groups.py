@@ -3,11 +3,11 @@
 import logging
 from typing import Any
 
-import httpx
 from cachetools import TTLCache
 
 from app.core.config import settings
-from app.gateway.ranger_client import get_ranger_client
+
+from app.gateway.ranger_client import RangerClient
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,12 @@ _user_groups_cache: TTLCache[str, list[str]] = TTLCache(
 )
 
 
-async def get_user_groups_from_ranger(username: str) -> list[str]:
+async def get_user_groups_from_ranger(ranger_client: RangerClient, username: str) -> list[str]:
     """
     Get user groups from Ranger UserSync.
 
     Args:
+        ranger_client: RangerClient
         username: Username
 
     Returns:
@@ -35,8 +36,6 @@ async def get_user_groups_from_ranger(username: str) -> list[str]:
     if cached_groups is not None:
         logger.debug(f"Cache hit for user groups: {username}")
         return cached_groups
-
-    ranger_client = get_ranger_client()
 
     # Get user info from Ranger
     result = await ranger_client.get_user(username)

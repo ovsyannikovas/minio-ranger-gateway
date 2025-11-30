@@ -1,1 +1,15 @@
-.idea
+.env
+.env.*
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.idea/
+.vscode/
+*.iml
+coverage/
+htmlcov/
+alembic/
+migrations/
+*.log
+.DS_Store

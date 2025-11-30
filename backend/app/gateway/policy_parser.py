@@ -100,7 +100,7 @@ class PolicyChecker:
         bucket: str,
         object_path: str | None,
         access_type: str,
-    ) -> tuple[bool, bool]:
+    ) -> tuple[bool, bool, int]:
         """
         Check if user has access based on policies.
 
@@ -117,9 +117,11 @@ class PolicyChecker:
         """
         logger.debug(f"Starting policy check: user={user}, groups={user_groups}, bucket={bucket}, object={object_path}, access={access_type}")
 
+        policy_id = None
         # Check each policy
         for i, policy in enumerate(policies):
             policy_name = policy.get("name", f"UnnamedPolicy-{i}")
+            policy_id = policy.get("id", 0)
             logger.debug(f"Checking policy [{i}]: {policy_name}")
 
             if not policy.get("isEnabled", True):
@@ -194,7 +196,7 @@ class PolicyChecker:
                             f"✅ ACCESS GRANTED by policy '{policy_name}': "
                             f"user={user}, bucket={bucket}, object={object_path}, access={access_type}, audited={is_audited}"
                         )
-                        return True, is_audited
+                        return True, is_audited, policy_id
 
             if not matched:
                 logger.debug(f"No matching access found in policy {policy_name}.")
@@ -203,5 +205,5 @@ class PolicyChecker:
             f"❌ ACCESS DENIED: No matching policy found for "
             f"user={user}, bucket={bucket}, object={object_path}, access={access_type}"
         )
-        return False, False
+        return False, False, policy_id
 

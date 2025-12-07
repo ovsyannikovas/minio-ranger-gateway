@@ -10,12 +10,14 @@ import logging
 from typing import Any
 
 from app.core.config import settings
-from app.gateway.cache import (
+from app.service.cache import (
     cache_authorization,
     get_cached_authorization,
     get_policies,
 )
-from app.gateway.policy_parser import PolicyChecker
+from app.service.policy_parser import PolicyChecker
+
+from app.service.constants import S3AccessType
 
 logger = logging.getLogger(__name__)
 
@@ -37,21 +39,86 @@ def extract_resource_from_path(path: str) -> tuple[str, str | None]:
     return bucket, object_path
 
 
-def map_http_method_to_access_type(method: str) -> str:
+S3_READ_ACTIONS = [
+    's3:GetObject',
+    's3:GetObjectAcl',
+    's3:GetObjectTagging',
+    's3:GetObjectVersion',
+    's3:GetObjectVersionAcl',
+    's3:GetObjectVersionTagging',
+    's3:GetBucketAcl',
+    's3:GetBucketCORS',
+    's3:GetBucketLocation',
+    's3:GetBucketLogging',
+    's3:GetBucketNotification',
+    's3:GetBucketPolicy',
+    's3:GetBucketRequestPayment',
+    's3:GetBucketTagging',
+    's3:GetBucketVersioning',
+    's3:GetBucketWebsite',
+    's3:GetLifecycleConfiguration',
+    's3:GetReplicationConfiguration',
+    's3:ListBucket',
+    's3:ListBucketVersions',
+    's3:ListAllMyBuckets',
+    's3:ListMultipartUploadParts',
+]
+
+S3_LIST_ACTIONS = [
+    's3:ListBucket',
+    's3:ListBucketVersions',
+    's3:ListAllMyBuckets',
+    's3:ListMultipartUploadParts',
+    's3:ListBucketMultipartUploads',
+]
+
+S3_WRITE_ACTIONS = [
+    's3:PutObject',
+    's3:PutObjectAcl',
+    's3:PutObjectTagging',
+    's3:PutObjectVersionAcl',
+    's3:PutObjectVersionTagging',
+    's3:PutBucketAcl',
+    's3:PutBucketCORS',
+    's3:PutBucketLogging',
+    's3:PutBucketNotification',
+    's3:PutBucketPolicy',
+    's3:PutBucketRequestPayment',
+    's3:PutBucketTagging',
+    's3:PutBucketVersioning',
+    's3:PutBucketWebsite',
+    's3:PutLifecycleConfiguration',
+    's3:PutReplicationConfiguration',
+    's3:RestoreObject',
+    's3:CreateBucket',
+]
+
+S3_DELETE_ACTIONS = [
+    's3:DeleteObject',
+    's3:DeleteObjectVersion',
+    's3:DeleteBucket',
+    's3:DeleteObjectTagging',
+    's3:DeleteObjectVersionTagging',
+    's3:AbortMultipartUpload',
+]
+
+
+def map_action_to_access_type(action: str) -> S3AccessType:
     """
     Маппинг HTTP-метода в Ranger access type.
     GET/HEAD = read, PUT/POST = write, DELETE = delete, иначе read.
     Может быть скорректировано выше (например, GET bucket → list).
     """
-    method_upper = method.upper()
-    if method_upper in ("GET", "HEAD"):
-        return "read"
-    elif method_upper in ("PUT", "POST"):
-        return "write"
-    elif method_upper == "DELETE":
-        return "delete"
+    if action in S3_READ_ACTIONS:
+        return S3AccessType.READ
+    elif action in S3_WRITE_ACTIONS:
+        return S3AccessType.WRITE
+    elif action in S3_DELETE_ACTIONS:
+        return S3AccessType.DELETE
+    elif action in S3_LIST_ACTIONS:
+        return S3AccessType.LIST
     else:
-        return "read"
+        return S3AccessType.ADMIN
 
 
 async def check_authorization(

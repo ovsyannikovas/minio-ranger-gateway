@@ -16,7 +16,7 @@ class SolrLoggerClient:
     async def aclose(self):
         await self._client.aclose()
 
-    def build_audit_record(
+    def  build_audit_record(
         self,
         *,
         policy: int,

@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.api.routes import gateway
+from app.api.routes import check_ranger_access
 
 api_router = APIRouter()
 
@@ -10,4 +10,4 @@ def health_check():
     """Health-check endpoint for Docker Compose/monitoring"""
     return JSONResponse(content={"status": "ok"})
 
-api_router.include_router(gateway.router)
+api_router.include_router(check_ranger_access.router)

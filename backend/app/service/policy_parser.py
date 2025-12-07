@@ -178,6 +178,12 @@ class PolicyChecker:
                 if not (user_match or group_match):
                     continue
 
+                is_audited = policy.get("isAuditEnabled", True)
+
+                is_admin = policy_item.get("delegateAdmin", False)
+                if is_admin:
+                    return True, is_audited, policy_id
+
                 # Check access type
                 accesses = policy_item.get("accesses", [])
                 logger.debug(f"Checking accesses: {accesses}")
@@ -191,7 +197,6 @@ class PolicyChecker:
                     )
 
                     if access_type_match and is_allowed:
-                        is_audited = policy.get("isAuditEnabled", True)
                         logger.info(
                             f"✅ ACCESS GRANTED by policy '{policy_name}': "
                             f"user={user}, bucket={bucket}, object={object_path}, access={access_type}, audited={is_audited}"

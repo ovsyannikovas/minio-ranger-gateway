@@ -5,9 +5,9 @@ import logging
 from typing import Any
 
 from app.core.config import settings
-from app.gateway.cache import set_policies
+from app.service.cache import set_policies
 
-from app.gateway.ranger_client import RangerClient
+from app.service.ranger_client import RangerClient
 
 logger = logging.getLogger(__name__)
 

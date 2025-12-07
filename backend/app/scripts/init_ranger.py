@@ -41,7 +41,6 @@ def init_ranger():
     headers = {
         'accept': 'application/json',
         'Content-Type': 'application/json',
-        'X-XSRF-HEADER': 'X9JfNSFVY03aUxYJfsJy'
     }
 
     # 1. Create service definition
@@ -88,14 +87,14 @@ def init_ranger():
 
     # Make API calls with retry logic
     for endpoint, data, description in [
-        ("/servicedef", service_def, "service definition"),
-        ("/service", {
+        (f"{base_url}/servicedef", service_def, "service definition"),
+        (f"{base_url}/service", {
             "name": "minio-service",
             "type": "minio-service-def",
             "configs": {"minioEndpoint": "http://minio:9000"},
             "description": "MinIO authorization policies"
         }, "service"),
-        ("/users", {
+        (f"{ranger_url}/service/xusers/users", {
             "name": "user1",
             "firstName": "User",
             "lastName": "One",
@@ -103,7 +102,7 @@ def init_ranger():
             "userRoleList": ["ROLE_USER"],
             "status": 1,
         }, "user"),
-        ("/policy", {
+        (f"{base_url}/policy", {
             "name": "minio-bucket-policy",
             "description": "Access to entire bucket",
             "service": "minio-service",
@@ -111,20 +110,31 @@ def init_ranger():
             "resources": {
                 "bucket": {"values": ["analytics"], "isExcludes": False, "isRecursive": False}
             },
-            "policyItems": [{
-                "users": ["user1"],
-                "accesses": [
-                    {"type": "read", "isAllowed": True},
-                    {"type": "write", "isAllowed": True},
-                    {"type": "list", "isAllowed": True}
-                ]
-            }]
+            "policyItems": [
+                {
+                    "users": ["user1"],
+                    "accesses": [
+                        {"type": "write", "isAllowed": True},
+                        {"type": "list", "isAllowed": True}
+                    ]
+                },
+                {
+                    "users": ["admin"],
+                    "delegateAdmin": True,
+                    "accesses": [
+                        {"type": "read", "isAllowed": True},
+                        {"type": "write", "isAllowed": True},
+                        {"type": "list", "isAllowed": True},
+                        {"type": "delete", "isAllowed": True},
+                    ]
+                }
+            ]
         }, "policy")
     ]:
         max_retries = 5
         for attempt in range(max_retries):
             try:
-                response = requests.post(f"{base_url}{endpoint}", auth=auth, json=data, headers=headers, timeout=10)
+                response = requests.post(f"{endpoint}", auth=auth, json=data, headers=headers, timeout=10)
                 if response.status_code in [200, 201]:
                     print(f"✓ Successfully created {description}")
                     break

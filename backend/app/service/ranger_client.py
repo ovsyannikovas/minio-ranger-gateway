@@ -66,7 +66,6 @@ class RangerClient:
                         return result["data"]
                     else:
                         # Return the dict itself if it looks like a policy
-                        print("HERE2")
                         return [result] if "policyItems" in result else []
                 else:
                     logger.warning(f"Unexpected response format from {url}: {type(result)}")

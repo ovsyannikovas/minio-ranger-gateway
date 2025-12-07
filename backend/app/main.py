@@ -4,26 +4,23 @@
 """
 import logging
 
-import sentry_sdk
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from fastapi.routing import APIRoute
-from starlette.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request
 
 from app.api.main import api_router
-from app.api.routes import gateway
+from app.api.routes import check_ranger_access
 from app.core.config import settings
-from app.gateway.policy_loader import load_policies, start_policy_loader, stop_policy_loader
-from app.gateway.ranger_client import RangerClient
-from app.gateway.solr_logger import SolrLoggerClient
-import httpx
-import redis.asyncio as redis
+from app.service.policy_loader import load_policies, start_policy_loader, stop_policy_loader
+from app.service.ranger_client import RangerClient
+from app.service.solr_logger import SolrLoggerClient
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
 
-if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
-    sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
+# if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
+#     sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
 
 
 @asynccontextmanager
@@ -41,34 +38,24 @@ async def lifespan(app: FastAPI):
 
     start_policy_loader(app.state.ranger_client)
 
-    app.state.minio_client = httpx.AsyncClient(base_url=settings.MINIO_ENDPOINT, timeout=60)
     app.state.solr_logger = SolrLoggerClient(settings.SOLR_AUDIT_URL)
-    app.state.redis_client = redis.Redis(host="redis", port=6379, db=0, password="redispass123")
 
     yield
     stop_policy_loader()
-    await app.state.minio_client.aclose()
     await app.state.solr_logger.aclose()
-    await app.state.redis_client.aclose()
     await app.state.ranger_client.aclose()
 
-
 app = FastAPI(
-    title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )
 
-# Set all CORS enabled origins
-if settings.all_cors_origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.all_cors_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
     )
 
-# В первую очередь маршрутизатор gateway, затем API v1
-app.include_router(gateway.router, prefix="", tags=["gateway"])
+app.include_router(check_ranger_access.router, prefix=settings.API_V1_STR, tags=["gateway"])
 app.include_router(api_router, prefix=settings.API_V1_STR)

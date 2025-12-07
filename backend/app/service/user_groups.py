@@ -7,7 +7,7 @@ from cachetools import TTLCache
 
 from app.core.config import settings
 
-from app.gateway.ranger_client import RangerClient
+from app.service.ranger_client import RangerClient
 
 logger = logging.getLogger(__name__)
 

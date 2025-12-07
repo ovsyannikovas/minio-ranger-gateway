@@ -27,7 +27,6 @@ COPY pyproject.toml README.md poetry.lock* ./
 RUN poetry install --no-root
 
 # Копируем код
-COPY scripts /app/scripts
 COPY app /app/app
 
 # Устанавливаем PYTHONPATH

@@ -98,11 +98,15 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    depends_on:
+      gateway:
+        condition: service_healthy
     environment:
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=password
       - MINIO_SERVER_URL=http://minio:9000
       - MINIO_BROWSER_REDIRECT_URL=http://localhost:9001
+      - MINIO_POLICY_PLUGIN_URL=http://gateway:8000/api/v1/check
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -111,34 +115,6 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    hostname: redis.example.com
-    networks:
-      - rangernw
-    ports:
-      - "6379:6379"
-    command: >
-      redis-server
-      --appendonly yes
-      --appendfsync everysec
-      --save 900 1
-      --save 300 10
-      --save 60 10000
-      --requirepass redispass123
-      --dir /data
-      --dbfilename dump.rdb
-      --maxmemory 1gb
-      --maxmemory-policy allkeys-lru
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
-      interval: 10s
-      timeout: 3s
-      retries: 5
 
   gateway:
     build:
@@ -152,10 +128,6 @@ services:
     depends_on:
       ranger-admin:
         condition: service_healthy
-      minio:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     environment:
       # Ranger configuration
       - RANGER_HOST=http://ranger-admin:6080
@@ -164,14 +136,12 @@ services:
       - RANGER_SERVICE_NAME=minio-service
       - RANGER_CACHE_TTL=300
       # MinIO configuration
-      - MINIO_ENDPOINT=http://minio:9000
       - MINIO_ROOT_USER=admin
       - MINIO_ROOT_PASSWORD=password
       # FastAPI settings (minimal for gateway - no DB needed)
       - PROJECT_NAME=MinIO-Ranger Gateway
       - API_V1_STR=/api/v1
       - ENVIRONMENT=local
-      - SECRET_KEY=changethis
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
       interval: 10s
@@ -180,13 +150,12 @@ services:
       start_period: 30s
     command: >
       sh -c "
-      python app/init_ranger.py &&
+      python app/scripts/init_ranger.py &&
       fastapi run --host 0.0.0.0 --port 8000 app/main.py
       "
 
 volumes:
   minio_data:
-  redis_data:
 
 networks:
   rangernw:

@@ -11,6 +11,7 @@ from app.service.authorizer import (
 from app.service.constants import (
     S3AccessType,
 )
+from app.service.ip_whitelist import is_ip_allowed
 from app.service.policy_parser import PolicyChecker
 from app.service.ranger_client import RangerClient
 from app.service.service import (
@@ -52,6 +53,13 @@ async def check_ranger_access(
         HTTPException: 400 если отсутствуют обязательные поля
                      403 если доступ запрещен политикой
     """
+    client_ip = request.client.host
+    if not is_ip_allowed(client_ip):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Access denied from IP {client_ip}. IP is not in whitelist."
+        )
+
     try:
         username, bucket, object_path, access_type = extract_request_metadata(
             body,

@@ -137,10 +137,7 @@ class RangerClient:
 
         for url in endpoints:
             try:
-                logger.warning("before")
                 response = await self._client.get(url)
-                logger.warning("get_user")
-                logger.warning(response.json())
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPStatusError as e:

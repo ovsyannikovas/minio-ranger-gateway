@@ -3,10 +3,14 @@
 Организует запуск, подключение внешних клиентов и регистрацию API маршрутов.
 """
 import logging
+import time
 from contextlib import asynccontextmanager
 
+import colorlog
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.api.main import api_router
@@ -22,8 +26,67 @@ from app.service.solr_logger import SolrLoggerClient
 logger = logging.getLogger(__name__)
 
 
-# if settings.SENTRY_DSN and settings.ENVIRONMENT != "local":
-#     sentry_sdk.init(dsn=str(settings.SENTRY_DSN), enable_tracing=True)
+def setup_colored_logging():
+    """Настройка цветных логов с помощью colorlog."""
+    # Создаем цветной форматтер
+    formatter = colorlog.ColoredFormatter(
+        "%(asctime)s %(log_color)s[%(levelname)s]%(reset)s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        log_colors={
+            'DEBUG':    'cyan',
+            'INFO':     'green',
+            'WARNING':  'yellow',
+            'ERROR':    'red',
+            'CRITICAL': 'bold_red',
+        }
+    )
+
+    # Настраиваем handler
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+
+    # Применяем ко всем логгерам
+    logging.basicConfig(
+        level=logging.INFO,
+        handlers=[handler]
+    )
+
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.time()
+
+        # Получаем информацию о запросе
+        client_ip = request.client.host if request.client else "unknown"
+        method = request.method
+        url = str(request.url)
+
+        # Логируем начало запроса
+        logger.info(f"→ {method} {url} from {client_ip}")
+
+        try:
+            response = await call_next(request)
+            process_time = time.time() - start_time
+
+            # Логируем успешный ответ
+            logger.info(
+                f"← {method} {url} {response.status_code} "
+                f"({process_time:.3f}s) from {client_ip}"
+            )
+
+            # Добавляем заголовок с временем выполнения
+            response.headers["X-Process-Time"] = f"{process_time:.3f}s"
+            return response
+
+        except Exception as e:
+            process_time = time.time() - start_time
+
+            # Логируем ошибку
+            logger.error(
+                f"✗ {method} {url} ERROR ({process_time:.3f}s) "
+                f"from {client_ip}: {str(e)}"
+            )
+            raise
 
 
 @asynccontextmanager
@@ -35,6 +98,8 @@ async def lifespan(app: FastAPI):
     - Инициализацию клиентов (Ranger, MinIO, Solr, Redis)
     - Освобождение ресурсов на shutdown
     """
+    setup_colored_logging()
+
     logger.info("Loading policies on startup...")
 
     app.state.ranger_client = RangerClient()
@@ -52,6 +117,8 @@ app = FastAPI(
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     lifespan=lifespan,
 )
+
+app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(exc: RequestValidationError):

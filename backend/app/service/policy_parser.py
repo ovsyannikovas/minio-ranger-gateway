@@ -208,11 +208,6 @@ class PolicyChecker:
                         )
                         return True, is_audited, policy_id
 
-                    logger.error(f"Checking policy {policy['name']}...")
-                    logger.error(f"Resource bucket match: {PolicyMatcher.match_bucket(bucket, policy_bucket)}")
-                    logger.error(f"PolicyItem users: {policy_item.get('users')}")
-                    logger.error(f"Access type match: {access.get('type')} == {access_type}?")
-
             if not matched:
                 logger.debug(f"No matching access found in policy {policy_name}.")
 

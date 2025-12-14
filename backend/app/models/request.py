@@ -1,29 +1,28 @@
-from typing import Optional, List
 
 from pydantic import BaseModel, Field
 
 
 class Conditions(BaseModel):
-    Authorization: List[str]
-    CurrentTime: List[str]
-    EpochTime: List[str]
-    Referer: List[str]
-    SecureTransport: List[str]
-    SourceIp: List[str]
-    User_Agent: List[str] = Field(..., alias="User-Agent")
-    UserAgent: List[str]
-    X_Amz_Content_Sha256: List[str] = Field(..., alias="X-Amz-Content-Sha256")
-    X_Amz_Date: List[str] = Field(..., alias="X-Amz-Date")
-    X_Amz_Security_Token: Optional[List[str]] = Field(None, alias="X-Amz-Security-Token")
-    X_Forwarded_For: Optional[List[str]] = Field(None, alias="X-Forwarded-For")
-    accesskey: List[str]
-    authType: List[str]
-    parent: List[str]
-    principaltype: List[str]
-    signatureversion: List[str]
-    userid: List[str]
-    username: List[str]
-    versionid: List[str]
+    Authorization: list[str]
+    CurrentTime: list[str]
+    EpochTime: list[str]
+    Referer: list[str]
+    SecureTransport: list[str]
+    SourceIp: list[str]
+    User_Agent: list[str] = Field(..., alias="User-Agent")
+    UserAgent: list[str]
+    X_Amz_Content_Sha256: list[str] = Field(..., alias="X-Amz-Content-Sha256")
+    X_Amz_Date: list[str] = Field(..., alias="X-Amz-Date")
+    X_Amz_Security_Token: list[str] | None = Field(None, alias="X-Amz-Security-Token")
+    X_Forwarded_For: list[str] | None = Field(None, alias="X-Forwarded-For")
+    accesskey: list[str]
+    authType: list[str]
+    parent: list[str]
+    principaltype: list[str]
+    signatureversion: list[str]
+    userid: list[str]
+    username: list[str]
+    versionid: list[str]
 
     class Config:
         populate_by_name = True
@@ -32,12 +31,12 @@ class Conditions(BaseModel):
 class Claims(BaseModel):
     accessKey: str
     parent: str
-    exp: Optional[int] = None
+    exp: int | None = None
 
 
 class InputData(BaseModel):
     account: str
-    groups: Optional[str] = None
+    groups: str | None = None
     action: str
     originalAction: str
     bucket: str

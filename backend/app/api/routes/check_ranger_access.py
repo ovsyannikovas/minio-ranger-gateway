@@ -2,26 +2,24 @@
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
+from starlette.responses import JSONResponse
 
-from app.core.config import settings
+from app.models.request import RequestBody
 from app.service.authorizer import (
     check_authorization,
-    extract_resource_from_path,
-    map_action_to_access_type,
 )
-from app.service.user_groups import get_user_groups_from_ranger
-from app.service.solr_logger import SolrLoggerClient
-from app.service.ranger_client import RangerClient
-from app.models.request import RequestBody
 from app.service.constants import (
     S3AccessType,
-    S3ResourceType,
-    AuditResult,
-    DEFAULT_POLICY_VERSION
 )
-
-from app.service.service import handle_access_denied, handle_access_granted, extract_request_metadata
-
+from app.service.policy_parser import PolicyChecker
+from app.service.ranger_client import RangerClient
+from app.service.service import (
+    extract_request_metadata,
+    handle_access_denied,
+    handle_access_granted,
+)
+from app.service.solr_logger import SolrLoggerClient
+from app.service.user_groups import get_user_groups_roles_from_ranger
 
 logger = logging.getLogger(__name__)
 
@@ -56,26 +54,30 @@ async def check_ranger_access(
     """
     try:
         username, bucket, object_path, access_type = extract_request_metadata(
-            body, request
+            body,
         )
 
         logger.debug(
             f"Processing request: user={username}, bucket={bucket}, "
-            f"object={object_path}, access={str(access_type)}"
+            f"object={object_path}, access={access_type.value}"
         )
 
         ranger_client: RangerClient = request.app.state.ranger_client
         solr_logger: SolrLoggerClient = request.app.state.solr_logger
 
-        user_groups = await get_user_groups_from_ranger(ranger_client, username)
+        user_groups, user_roles = await get_user_groups_roles_from_ranger(ranger_client, username)
         logger.debug(f"Groups for {username}: {user_groups}")
+
+        if access_type == S3AccessType.ADMIN and PolicyChecker.is_admin(user_roles):
+            return JSONResponse(content={"result":True})
 
         is_allowed, is_audited, policy_id = await check_authorization(
             user=username,
             bucket=bucket,
             object_path=object_path,
-            access_type=str(access_type),
-            user_groups=user_groups
+            access_type=access_type.value,
+            user_groups=user_groups,
+            user_roles=user_roles,
         )
 
         if not is_allowed:
@@ -83,7 +85,7 @@ async def check_ranger_access(
                 username=username,
                 bucket=bucket,
                 object_path=object_path,
-                access_type=str(access_type),
+                access_type=access_type.value,
                 policy_id=policy_id,
                 request=request,
                 solr_logger=solr_logger
@@ -93,13 +95,13 @@ async def check_ranger_access(
             username=username,
             bucket=bucket,
             object_path=object_path,
-            access_type=str(access_type),
+            access_type=access_type.value,
             policy_id=policy_id,
             request=request,
             solr_logger=solr_logger
         )
 
-        return Response(status_code=status.HTTP_200_OK)
+        return JSONResponse(content={"result":True})
 
     except HTTPException:
         raise

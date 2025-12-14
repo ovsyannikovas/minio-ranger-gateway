@@ -5,8 +5,7 @@ import logging
 from typing import Any
 
 from app.core.config import settings
-from app.service.cache import set_policies
-
+from app.service.cache import set_policies, set_servisedef_id
 from app.service.ranger_client import RangerClient
 
 logger = logging.getLogger(__name__)
@@ -28,15 +27,25 @@ async def load_policies(ranger_client: RangerClient, service_name: str | None = 
         List of policy dictionaries
     """
     service = service_name or settings.RANGER_SERVICE_NAME
+    servicedef = settings.RANGER_SERVICEDEF_NAME
 
     try:
         policies = await ranger_client.get_policies(service)
         logger.info(f"Loaded {len(policies)} policies for service {service}")
         set_policies(service, policies)
-        return policies
     except Exception as e:
         logger.error(f"Error loading policies for service {service}: {e}")
         return []
+
+    try:
+        servicedef_id = await ranger_client.get_servicedef_id_by_name(servicedef)
+        logger.info(f"Loaded {servicedef_id} servicedef for servicedef {servicedef}")
+        set_servisedef_id(servicedef, servicedef_id)
+    except Exception as e:
+        logger.error(f"Error loading servicedef_id for servicedef {servicedef}: {e}")
+        return []
+
+    return policies
 
 
 async def policy_loader_loop(ranger_client: RangerClient, interval: int = 300) -> None:

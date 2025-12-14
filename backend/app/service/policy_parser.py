@@ -1,7 +1,6 @@
 """Parser for Ranger policies - local authorization check."""
 
 import logging
-import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -84,19 +83,21 @@ class PolicyMatcher:
         return PolicyMatcher.match_resource(object_path, values, is_excludes, is_recursive)
 
 
-import logging
-from typing import Any
-
-logger = logging.getLogger(__name__)
-
 class PolicyChecker:
     """Checks authorization against loaded policies."""
+    ADMIN_ROLE = "ROLE_SYS_ADMIN"
 
-    @staticmethod
+    @classmethod
+    def is_admin(cls, user_roles: list[str]):
+        return cls.ADMIN_ROLE in user_roles
+
+    @classmethod
     def check_access(
+        cls,
         policies: list[dict[str, Any]],
         user: str,
         user_groups: list[str],
+        user_roles: list[str],
         bucket: str,
         object_path: str | None,
         access_type: str,
@@ -108,6 +109,7 @@ class PolicyChecker:
             policies: List of policy dictionaries from Ranger
             user: Username
             user_groups: List of user groups
+            user_roles: List of user roles
             bucket: Bucket name
             object_path: Object path (optional)
             access_type: Access type (read, write, delete, list)
@@ -180,7 +182,10 @@ class PolicyChecker:
 
                 is_audited = policy.get("isAuditEnabled", True)
 
-                is_admin = policy_item.get("delegateAdmin", False)
+                is_admin = (
+                    policy_item.get("delegateAdmin", False)
+                    or cls.is_admin(user_roles)
+                )
                 if is_admin:
                     return True, is_audited, policy_id
 
@@ -202,6 +207,11 @@ class PolicyChecker:
                             f"user={user}, bucket={bucket}, object={object_path}, access={access_type}, audited={is_audited}"
                         )
                         return True, is_audited, policy_id
+
+                    logger.error(f"Checking policy {policy['name']}...")
+                    logger.error(f"Resource bucket match: {PolicyMatcher.match_bucket(bucket, policy_bucket)}")
+                    logger.error(f"PolicyItem users: {policy_item.get('users')}")
+                    logger.error(f"Access type match: {access.get('type')} == {access_type}?")
 
             if not matched:
                 logger.debug(f"No matching access found in policy {policy_name}.")

@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Установка Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 -
+RUN pip install poetry
 
 # Добавляем Poetry в PATH
 ENV PATH="${PATH}:/root/.local/bin"
@@ -39,4 +39,4 @@ ENV PATH="/app/.venv/bin:${PATH}"
 RUN poetry install
 
 # Запуск приложения напрямую из виртуального окружения
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--traceback"]

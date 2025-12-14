@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
+import time
+
 import requests
 from requests.auth import HTTPBasicAuth
-import time
-import os
-import sys
 
 ranger_url = 'http://ranger-admin:6080'
 auth = HTTPBasicAuth('admin', 'rangerR0cks!')
@@ -14,22 +13,18 @@ def wait_for_ranger():
     max_retries = 30
     retry_interval = 5
 
-    print(f"Waiting for Ranger at {ranger_url}...")
 
     for i in range(max_retries):
         try:
             response = requests.get(ranger_url, auth=auth, timeout=5)
             if response.status_code == 200:
-                print("Ranger is ready!")
                 return True
         except requests.exceptions.RequestException:
             pass
 
         if i < max_retries - 1:
-            print(f"Attempt {i + 1}/{max_retries} failed, retrying in {retry_interval}s...")
             time.sleep(retry_interval)
 
-    print("ERROR: Ranger is not ready after maximum retries")
     return False
 
 
@@ -86,7 +81,7 @@ def init_ranger():
     }
 
     # Make API calls with retry logic
-    for endpoint, data, description in [
+    for endpoint, data, _description in [
         (f"{base_url}/servicedef", service_def, "service definition"),
         (f"{base_url}/service", {
             "name": "minio-service",
@@ -136,26 +131,22 @@ def init_ranger():
             try:
                 response = requests.post(f"{endpoint}", auth=auth, json=data, headers=headers, timeout=10)
                 if response.status_code in [200, 201]:
-                    print(f"✓ Successfully created {description}")
                     break
                 elif response.status_code in [400, 404]:
-                    print(f"✓ {description} already exists")
                     break
                 else:
-                    print(f"✗ Failed to create {description} (HTTP {response.status_code})")
-            except requests.exceptions.RequestException as e:
-                print(f"✗ Request failed for {description}: {e}")
+                    pass
+            except requests.exceptions.RequestException:
+                pass
 
             if attempt < max_retries - 1:
                 time.sleep(3)
         else:
-            print(f"ERROR: Failed to create {description} after {max_retries} attempts")
+            pass
 
 
 if __name__ == "__main__":
     if wait_for_ranger():
         init_ranger()
-        print("Initialization completed!")
 
         # Start FastAPI app
-        print("Starting FastAPI application...")

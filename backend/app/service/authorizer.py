@@ -7,7 +7,6 @@ Authorization logic for MinIO requests.
 """
 
 import logging
-from typing import Any
 
 from app.core.config import settings
 from app.service.cache import (
@@ -15,9 +14,8 @@ from app.service.cache import (
     get_cached_authorization,
     get_policies,
 )
-from app.service.policy_parser import PolicyChecker
-
 from app.service.constants import S3AccessType
+from app.service.policy_parser import PolicyChecker
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +125,7 @@ async def check_authorization(
     object_path: str | None,
     access_type: str,
     user_groups: list[str] | None = None,
+    user_roles: list[str] | None = None,
     service_name: str | None = None,
 ) -> tuple[bool, bool, int]:
     """
@@ -137,6 +136,7 @@ async def check_authorization(
         object_path (str|None): путь (если объект)
         access_type (str): тип (read/write/delete/list)
         user_groups (list[str]|None): группы
+        user_roles (list[str]|None): роли
         service_name (str): Сервис в Ranger (по-умолчанию — config)
     Return:
         (is_allowed: bool, is_audited: bool, policy_id: int)
@@ -150,7 +150,7 @@ async def check_authorization(
         logger.debug(f"Cache hit for {user} {bucket}/{object_path} {access_type}")
         return cached_result
 
-    # 2. Париc из кэша политик
+    # 2. Политики из кэша политик
     policies = get_policies(service)
     if not policies:
         logger.warning(f"No policies found for service {service}, denying access")
@@ -161,6 +161,7 @@ async def check_authorization(
         policies=policies,
         user=user,
         user_groups=user_groups,
+        user_roles=user_roles,
         bucket=bucket,
         object_path=object_path,
         access_type=access_type,
@@ -174,6 +175,7 @@ async def check_authorization(
         access_type,
         is_allowed,
         is_audited,
+        policy_id,
     )
     if is_allowed:
         logger.info(f"✔️ Access granted: user={user} bucket={bucket} object={object_path} type={access_type} via policy={policy_id}")

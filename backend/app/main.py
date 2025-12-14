@@ -3,18 +3,21 @@
 Организует запуск, подключение внешних клиентов и регистрацию API маршрутов.
 """
 import logging
-
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.responses import JSONResponse
 
 from app.api.main import api_router
 from app.api.routes import check_ranger_access
 from app.core.config import settings
-from app.service.policy_loader import load_policies, start_policy_loader, stop_policy_loader
+from app.service.policy_loader import (
+    start_policy_loader,
+    stop_policy_loader,
+)
 from app.service.ranger_client import RangerClient
 from app.service.solr_logger import SolrLoggerClient
-from fastapi.exceptions import RequestValidationError
-from starlette.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +54,7 @@ app = FastAPI(
 )
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
+async def validation_exception_handler(exc: RequestValidationError):
     return JSONResponse(
         status_code=422,
         content={"detail": exc.errors(), "body": exc.body},

@@ -13,6 +13,8 @@ from app.core.config import settings
 # Value: list of policy dicts
 _policy_cache: dict[str, list[dict[str, Any]]] = {}
 
+_servicedef_cache: dict[str, int] = {}
+
 # TTL cache for authorization results
 # Key: (service, user, bucket, object, access_type)
 # Value: (is_allowed, is_audited)
@@ -66,10 +68,11 @@ def cache_authorization(
     access_type: str,
     is_allowed: bool,
     is_audited: bool,
+    policy_id: int,
 ) -> None:
     """Cache authorization result."""
     cache_key = _make_cache_key(service, user, bucket, object_path, access_type)
-    _authorization_cache[cache_key] = (is_allowed, is_audited)
+    _authorization_cache[cache_key] = (is_allowed, is_audited, policy_id)
 
 
 def clear_cache() -> None:
@@ -85,6 +88,16 @@ def get_policies(service_name: str) -> list[dict[str, Any]]:
 def set_policies(service_name: str, policies: list[dict[str, Any]]) -> None:
     """Cache policies for a service."""
     _policy_cache[service_name] = policies
+
+
+def get_servisedef_id(servicedef_name: str) -> int | None:
+    """Get cached servicedef id for a service."""
+    return _servicedef_cache.get(servicedef_name)
+
+
+def set_servisedef_id(servicedef_name: str, servicedef_id: int) -> None:
+    """Cache servicedef for a service."""
+    _servicedef_cache[servicedef_name] = servicedef_id
 
 
 def clear_policy_cache() -> None:

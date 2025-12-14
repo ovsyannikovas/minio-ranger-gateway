@@ -5,8 +5,6 @@ from typing import Any
 
 from cachetools import TTLCache
 
-from app.core.config import settings
-
 from app.service.ranger_client import RangerClient
 
 logger = logging.getLogger(__name__)
@@ -20,85 +18,54 @@ _user_groups_cache: TTLCache[str, list[str]] = TTLCache(
 )
 
 
-async def get_user_groups_from_ranger(ranger_client: RangerClient, username: str) -> list[str]:
+async def get_user_groups_roles_from_ranger(
+    ranger_client: RangerClient, username: str
+) -> tuple[list[str], list[str]]:
     """
-    Get user groups from Ranger UserSync.
+    Get user groups and roles from Ranger UserSync.
 
     Args:
         ranger_client: RangerClient
         username: Username
 
     Returns:
-        List of group names
+        Tuple of (groups, roles)
     """
     # Check cache first
-    cached_groups = _user_groups_cache.get(username)
-    if cached_groups is not None:
-        logger.debug(f"Cache hit for user groups: {username}")
-        return cached_groups
+    cached = _user_groups_cache.get(username)
+    if cached is not None:
+        logger.debug(f"Cache hit for user groups/roles: {username}")
+        return cached
 
     # Get user info from Ranger
     result = await ranger_client.get_user(username)
     if result is None:
-        # User not found, cache empty list
+        # User not found, cache empty lists
         logger.warning(f"User {username} not found in Ranger")
-        _user_groups_cache[username] = []
-        return []
+        _user_groups_cache[username] = ([], [])
+        return [], []
 
-    # Extract groups from user info
     groups = []
+    roles = []
 
-    # Handle different response formats
     if isinstance(result, dict):
-        # Try to extract groups from various possible fields
-        if "groups" in result:
-            groups_data = result["groups"]
-            if isinstance(groups_data, list):
-                # List of group objects or group names
-                for group in groups_data:
-                    if isinstance(group, dict):
-                        # Group object with name field
-                        group_name = group.get("name") or group.get("groupName")
-                        if group_name:
-                            groups.append(group_name)
-                    elif isinstance(group, str):
-                        # Direct group name
-                        groups.append(group)
-            elif isinstance(groups_data, str):
-                # Comma-separated string
-                groups = [g.strip() for g in groups_data.split(",") if g.strip()]
+        # Извлекаем группы
+        group_names = result.get("groupNameList")
+        if isinstance(group_names, list):
+            groups = [g for g in group_names if isinstance(g, str)]
 
-        elif "groupList" in result:
-            # Alternative field name
-            groups_data = result["groupList"]
-            if isinstance(groups_data, list):
-                for group in groups_data:
-                    if isinstance(group, dict):
-                        group_name = group.get("name") or group.get("groupName")
-                        if group_name:
-                            groups.append(group_name)
-                    elif isinstance(group, str):
-                        groups.append(group)
+        # Извлекаем роли
+        user_roles = result.get("userRoleList")
+        if isinstance(user_roles, list):
+            roles = [r for r in user_roles if isinstance(r, str)]
 
-        elif "userGroups" in result:
-            # Another alternative
-            groups_data = result["userGroups"]
-            if isinstance(groups_data, list):
-                for group in groups_data:
-                    if isinstance(group, dict):
-                        group_name = group.get("name") or group.get("groupName")
-                        if group_name:
-                            groups.append(group_name)
-                    elif isinstance(group, str):
-                        groups.append(group)
+    # Кэшируем
+    _user_groups_cache[username] = (groups, roles)
 
-    # Cache the result (even if empty)
-    _user_groups_cache[username] = groups
-    if groups:
-        logger.info(f"Loaded {len(groups)} groups for user {username}: {groups}")
-    else:
-        logger.debug(f"No groups found for user {username}")
-    return groups
+    logger.info(
+        f"Loaded {len(groups)} groups and {len(roles)} roles for user {username}"
+    )
+    return groups, roles
 
 
 def clear_user_groups_cache() -> None:

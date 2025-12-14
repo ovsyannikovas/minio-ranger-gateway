@@ -1,7 +1,11 @@
-import httpx
 import uuid
 from datetime import datetime
+
+import httpx
+
 from app.core.config import settings
+from app.service.cache import get_servisedef_id
+
 
 class SolrLoggerClient:
     def __init__(self, base_url: str):
@@ -16,14 +20,13 @@ class SolrLoggerClient:
     async def aclose(self):
         await self._client.aclose()
 
-    def  build_audit_record(
+    def build_audit_record(
         self,
         *,
         policy: int,
         policyVersion: int,
         access: str,
         repo: str,
-        repoType: int,
         sess: str,
         reqUser: str,
         resource: str,
@@ -37,10 +40,13 @@ class SolrLoggerClient:
         logType: str = "RangerAudit",
         resType: str = "path",
         reason: str = "",
-        tags: list = [],
+        tags: list = None,
         cluster: str = "",
         zone: str = ""
     ) -> dict:
+        if tags is None:
+            tags = []
+        servicedef_id = get_servisedef_id(settings.RANGER_SERVICEDEF_NAME)
         evtTime = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
         return {
             "id": str(uuid.uuid4()),
@@ -50,7 +56,7 @@ class SolrLoggerClient:
             "access": access,
             "enforcer": "ranger-acl",
             "repo": repo,
-            "repoType": repoType,
+            "repoType": servicedef_id or 1,
             "sess": sess,
             "reqUser": reqUser,
             "resource": resource,
@@ -66,5 +72,5 @@ class SolrLoggerClient:
             "event_dur_ms": event_dur_ms,
             "tags": tags,
             "cluster": cluster,
-            "zone": zone
+            "zone": zone,
         }

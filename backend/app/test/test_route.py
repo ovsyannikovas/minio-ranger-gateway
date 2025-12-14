@@ -1,5 +1,6 @@
 # test_gateway_client.py
 import os
+
 import boto3
 from botocore.client import Config
 
@@ -28,12 +29,10 @@ def list_buckets():
     s3_client = create_s3_client()
     try:
         response = s3_client.list_buckets()
-        print("Buckets:")
-        for bucket in response['Buckets']:
-            print(f"  - {bucket['Name']} (created: {bucket['CreationDate']})")
+        for _bucket in response['Buckets']:
+            pass
         return response
-    except Exception as e:
-        print(f"Error listing buckets: {e}")
+    except Exception:
         return None
 
 
@@ -46,11 +45,8 @@ def put_object(bucket_name, object_key, data):
             Key=object_key,
             Body=data
         )
-        print(f"Object {object_key} uploaded successfully")
-        print(f"ETag: {response.get('ETag', 'N/A')}")
         return response
-    except Exception as e:
-        print(f"Error uploading object: {e}")
+    except Exception:
         return None
 
 
@@ -63,11 +59,8 @@ def get_object(bucket_name, object_key):
             Key=object_key
         )
         data = response['Body'].read()
-        print(f"Object {object_key} retrieved successfully")
-        print(f"Content: {data.decode('utf-8')}")
         return data
-    except Exception as e:
-        print(f"Error retrieving object: {e}")
+    except Exception:
         return None
 
 
@@ -77,14 +70,12 @@ def list_objects(bucket_name):
     try:
         response = s3_client.list_objects_v2(Bucket=bucket_name)
         if 'Contents' in response:
-            print(f"Objects in bucket '{bucket_name}':")
-            for obj in response['Contents']:
-                print(f"  - {obj['Key']} (size: {obj['Size']} bytes)")
+            for _obj in response['Contents']:
+                pass
         else:
-            print(f"No objects found in bucket '{bucket_name}'")
+            pass
         return response
-    except Exception as e:
-        print(f"Error listing objects: {e}")
+    except Exception:
         return None
 
 
@@ -93,10 +84,8 @@ def create_bucket(bucket_name):
     s3_client = create_s3_client()
     try:
         response = s3_client.create_bucket(Bucket=bucket_name)
-        print(f"Bucket '{bucket_name}' created successfully")
         return response
-    except Exception as e:
-        print(f"Error creating bucket: {e}")
+    except Exception:
         return None
 
 
@@ -104,26 +93,20 @@ if __name__ == "__main__":
     # Пример использования
 
     # 1. Список бакетов
-    print("=== Listing buckets ===")
     list_buckets()
 
     # 2. Создание бакета (если нужно)
     test_bucket = "my-test-bucket"
-    print(f"\n=== Creating bucket '{test_bucket}' ===")
     create_bucket(test_bucket)
 
     # 3. Загрузка объекта
-    print(f"\n=== Uploading object ===")
     put_object(test_bucket, "test-object.txt", b"Hello from boto3 client!")
 
     # 4. Получение объекта
-    print(f"\n=== Retrieving object ===")
     get_object(test_bucket, "def.json")
 
     # 5. Список объектов в бакете
-    print(f"\n=== Listing objects in bucket ===")
     list_objects(test_bucket)
 
     # 6. Еще раз список бакетов
-    print(f"\n=== Final bucket list ===")
     list_buckets()

@@ -1,41 +1,35 @@
 """MinIO Gateway routes - proxy requests to MinIO with Ranger authorization."""
 import logging
-from typing import Optional, Tuple, Dict, Any
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.core.config import settings
+from app.models.request import RequestBody
 from app.service.authorizer import (
-    check_authorization,
-    extract_resource_from_path,
     map_action_to_access_type,
 )
-from app.service.user_groups import get_user_groups_from_ranger
-from app.service.solr_logger import SolrLoggerClient
-from app.service.ranger_client import RangerClient
-from app.models.request import RequestBody
 from app.service.constants import (
-    S3AccessType,
-    S3ResourceType,
+    DEFAULT_POLICY_VERSION,
     AuditResult,
-    DEFAULT_POLICY_VERSION
+    S3AccessType,
 )
+from app.service.solr_logger import SolrLoggerClient
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def get_first_or_none(items: list, default: Any = None) -> Optional[Any]:
+def get_first_or_none(items: list, default: Any = None) -> Any | None:
     """Безопасное получение первого элемента списка."""
     return items[0] if items else default
 
 
 def extract_request_metadata(
         body: RequestBody,
-        request: Request
-) -> Tuple[str, str, str, Optional[str]]:
+) -> tuple[str, str, str, S3AccessType]:
     """Извлечение и валидация метаданных запроса."""
     username = get_first_or_none(body.input.conditions.username)
     if not username:
@@ -70,8 +64,8 @@ async def log_audit_context(
         access_type: str,
         request: Request,
         result: AuditResult,
-        policy_id: Optional[str] = None,
-        **extra_fields: Dict[str, Any]
+        policy_id: str | None = None,
+        **extra_fields: dict[str, Any]
 ):
     """Контекстный менеджер для логгирования аудита."""
     try:
@@ -82,7 +76,6 @@ async def log_audit_context(
             policyVersion=DEFAULT_POLICY_VERSION,
             access=access_type,
             repo=bucket,
-            repoType=S3ResourceType.BUCKET.value,
             sess=request.headers.get("X-Session-Id", ""),
             reqUser=username,
             resource=resource_path,
@@ -114,7 +107,7 @@ async def handle_access_denied(
         bucket: str,
         object_path: str,
         access_type: str,
-        policy_id: Optional[str],
+        policy_id: str | None,
         request: Request,
         solr_logger: SolrLoggerClient
 ) -> None:
@@ -153,7 +146,7 @@ async def handle_access_granted(
         bucket: str,
         object_path: str,
         access_type: str,
-        policy_id: Optional[str],
+        policy_id: str | None,
         request: Request,
         solr_logger: SolrLoggerClient
 ) -> None:

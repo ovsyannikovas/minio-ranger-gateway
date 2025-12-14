@@ -29,6 +29,45 @@ class RangerClient:
             timeout=10.0,
         )
 
+    async def get_servicedef_id_by_name(self, servicedef_name: str) -> int | None:
+        """
+        Get service ID by service definition name from Ranger.
+
+        Args:
+            servicedef_name: Name of the service definition (e.g., 'minio-service-def')
+
+        Returns:
+            Service ID or None if not found
+        """
+        url = f"{self.base_url}/service/public/v2/api/servicedef/name/{servicedef_name}"
+
+        try:
+            response = await self._client.get(url)
+            response.raise_for_status()
+
+            data = response.json()
+            service_id = data.get("id")
+
+            if service_id is not None:
+                logger.debug(f"Found service ID {service_id} for service name '{servicedef_name}'")
+                return service_id
+            else:
+                logger.warning(f"Service ID not found in response for '{servicedef_name}': {data}")
+                return None
+
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                logger.warning(f"Service definition '{servicedef_name}' not found at {url}")
+            else:
+                logger.error(f"HTTP error {e.response.status_code} from {url}: {e}")
+            return None
+        except httpx.RequestError as e:
+            logger.error(f"Request error from {url}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error getting service ID for '{servicedef_name}': {e}")
+            return None
+
     async def get_policies(self, service_name: str) -> list[dict[str, Any]]:
         """
         Get all policies for a service from Ranger.

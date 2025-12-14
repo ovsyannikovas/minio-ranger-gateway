@@ -15,11 +15,12 @@ class Settings(BaseSettings):
     RANGER_HOST: str = os.getenv("RANGER_HOST", "http://ranger:6080")
     RANGER_USER: str = os.getenv("RANGER_USER", "admin")
     RANGER_PASSWORD: str = os.getenv("RANGER_PASSWORD", "admin")
-    RANGER_SERVICE_NAME: str = os.getenv("RANGER_SERVICE_NAME", "minio-dev")
+    RANGER_SERVICE_NAME: str = os.getenv("RANGER_SERVICE_NAME", "minio-service")
+    RANGER_SERVICEDEF_NAME: str = os.getenv("RANGER_SERVICEDEF_NAME", "minio-service-def")
     RANGER_CACHE_TTL: int = os.getenv("RANGER_CACHE_TTL", 300)
 
     # --- Solr
-    SOLR_AUDIT_URL: str = os.getenv("SOLR_AUDIT_URL", "http://solr:8983/solr/ranger_audits")
+    SOLR_AUDIT_URL: str = os.getenv("SOLR_AUDIT_URL", "http://ranger-solr:8983/solr/ranger_audits")
 
     API_HOST: str = os.getenv("API_HOST", "localhost")
 

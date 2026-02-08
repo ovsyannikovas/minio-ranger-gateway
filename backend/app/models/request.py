@@ -42,7 +42,7 @@ class InputData(BaseModel):
     bucket: str
     conditions: Conditions
     owner: bool
-    object: str
+    object: str | None = None
     claims: Claims
     denyOnly: bool
 

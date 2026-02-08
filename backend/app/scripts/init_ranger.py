@@ -98,7 +98,7 @@ def init_ranger():
             "status": 1,
         }, "user"),
         (f"{base_url}/policy", {
-            "name": "minio-bucket-policy",
+            "name": "minio-bucket-policy0",
             "description": "Access to entire bucket",
             "service": "minio-service",
             "isEnabled": True,
@@ -109,20 +109,15 @@ def init_ranger():
                 {
                     "users": ["user1"],
                     "accesses": [
-                        {"type": "write", "isAllowed": True},
-                        {"type": "list", "isAllowed": True}
+                        {"type": "read", "isAllowed": True}
                     ]
                 },
                 {
-                    "users": ["admin"],
-                    "delegateAdmin": True,
+                    "users": ["user2"],
                     "accesses": [
-                        {"type": "read", "isAllowed": True},
-                        {"type": "write", "isAllowed": True},
-                        {"type": "list", "isAllowed": True},
-                        {"type": "delete", "isAllowed": True},
+                        {"type": "list", "isAllowed": True}
                     ]
-                }
+                },
             ]
         }, "policy")
     ]:
@@ -148,5 +143,3 @@ def init_ranger():
 if __name__ == "__main__":
     if wait_for_ranger():
         init_ranger()
-
-        # Start FastAPI app

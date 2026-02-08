@@ -1,5 +1,7 @@
 """MinIO Gateway routes - proxy requests to MinIO with Ranger authorization."""
 import logging
+import time  # Добавляем импорт time
+from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from starlette.responses import JSONResponse
@@ -53,6 +55,9 @@ async def check_ranger_access(
         HTTPException: 400 если отсутствуют обязательные поля
                      403 если доступ запрещен политикой
     """
+    start_time = time.time()
+    timings = {}  # Словарь для хранения времени выполнения этапов
+
     client_ip = request.client.host
     if not is_ip_allowed(client_ip):
         raise HTTPException(
@@ -61,9 +66,12 @@ async def check_ranger_access(
         )
 
     try:
+        # Этап 1: Извлечение метаданных
+        stage_start = time.time()
         username, bucket, object_path, access_type = extract_request_metadata(
             body,
         )
+        timings["extract_metadata"] = round((time.time() - stage_start) * 1000, 2)  # мс
 
         logger.debug(
             f"Processing request: user={username}, bucket={bucket}, "
@@ -73,12 +81,22 @@ async def check_ranger_access(
         ranger_client: RangerClient = request.app.state.ranger_client
         solr_logger: SolrLoggerClient = request.app.state.solr_logger
 
+        # Этап 2: Получение групп пользователя из Ranger
+        stage_start = time.time()
         user_groups, user_roles = await get_user_groups_roles_from_ranger(ranger_client, username)
+        timings["get_user_groups"] = round((time.time() - stage_start) * 1000, 2)  # мс
+
         logger.debug(f"Groups for {username}: {user_groups}")
 
-        if access_type == S3AccessType.ADMIN and PolicyChecker.is_admin(user_roles):
-            return JSONResponse(content={"result":True})
+        # Проверка на админа
+        if access_type == S3AccessType.ADMIN or PolicyChecker.is_admin(user_roles):
+            total_time = round((time.time() - start_time) * 1000, 2)
+            timings["total"] = total_time
+            logger.info(f"Admin access granted in {total_time}ms")
+            return JSONResponse(content={"result": True})
 
+        # Этап 3: Проверка авторизации в Ranger
+        stage_start = time.time()
         is_allowed, is_audited, policy_id = await check_authorization(
             user=username,
             bucket=bucket,
@@ -87,7 +105,10 @@ async def check_ranger_access(
             user_groups=user_groups,
             user_roles=user_roles,
         )
+        timings["check_authorization"] = round((time.time() - stage_start) * 1000, 2)  # мс
 
+        # Этап 4: Обработка результата и аудит
+        stage_start = time.time()
         if not is_allowed:
             await handle_access_denied(
                 username=username,
@@ -98,7 +119,30 @@ async def check_ranger_access(
                 request=request,
                 solr_logger=solr_logger
             )
+            # Прерываем выполнение если доступ запрещен
+            timings["audit_and_response"] = round((time.time() - stage_start) * 1000, 2)
+            total_time = round((time.time() - start_time) * 1000, 2)
+            timings["total"] = total_time
 
+            # Логируем подробные тайминги для запрещенных запросов
+            logger.warning(
+                f"Access DENIED for {username}@{bucket}/{object_path} "
+                f"in {total_time}ms. Timings: {timings}"
+            )
+
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "error": "Access denied",
+                    "user": username,
+                    "resource": f"{bucket}/{object_path}" if object_path else bucket,
+                    "action": access_type.value,
+                    "policy_id": policy_id,
+                    "timings_ms": timings  # Добавляем тайминги в ответ
+                }
+            )
+
+        # Если доступ разрешен - логируем успех
         await handle_access_granted(
             username=username,
             bucket=bucket,
@@ -108,19 +152,45 @@ async def check_ranger_access(
             request=request,
             solr_logger=solr_logger
         )
+        timings["audit_and_response"] = round((time.time() - stage_start) * 1000, 2)
 
-        return JSONResponse(content={"result":True})
+        # Итоговое время
+        total_time = round((time.time() - start_time) * 1000, 2)
+        timings["total"] = total_time
 
-    except HTTPException:
-        raise
+        # Логируем результат с таймингами
+        if total_time > 100:  # Если больше 100ms - логируем как warning
+            logger.warning(
+                f"SLOW request for {username}@{bucket}/{object_path} "
+                f"in {total_time}ms. Timings: {timings}"
+            )
+        else:
+            logger.info(
+                f"Access GRANTED for {username}@{bucket}/{object_path} "
+                f"in {total_time}ms. Timings: {timings}"
+            )
+
+        return JSONResponse(content={
+            "result": True,
+            "timings_ms": timings  # Возвращаем тайминги в ответ для отладки
+        })
+
+    except HTTPException as e:
+        # Если это наш HTTPException - добавляем тайминги
+        total_time = round((time.time() - start_time) * 1000, 2)
+        if e.status_code == 403:
+            logger.warning(f"HTTPException 403 after {total_time}ms: {e.detail}")
+        raise e
     except ValueError as e:
-        logger.error(f"Validation error: {e}")
+        total_time = round((time.time() - start_time) * 1000, 2)
+        logger.error(f"Validation error after {total_time}ms: {e}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
-        logger.exception(f"Unexpected error during authorization check: {e}")
+        total_time = round((time.time() - start_time) * 1000, 2)
+        logger.exception(f"Unexpected error after {total_time}ms during authorization check: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal server error"

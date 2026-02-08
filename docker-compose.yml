@@ -142,6 +142,7 @@ services:
       - PROJECT_NAME=MinIO-Ranger Gateway
       - API_V1_STR=/api/v1
       - ENVIRONMENT=local
+#      - IP_WHITELIST_RAW=172.19.0.7
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/utils/health-check/"]
       interval: 10s

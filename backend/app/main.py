@@ -47,7 +47,7 @@ def setup_colored_logging():
 
     # Применяем ко всем логгерам
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         handlers=[handler]
     )
 
@@ -121,7 +121,8 @@ app = FastAPI(
 app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(exc: RequestValidationError):
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print({"detail": exc.errors(), "body": exc.body})
     return JSONResponse(
         status_code=422,
         content={"detail": exc.errors(), "body": exc.body},

@@ -141,6 +141,7 @@ class PolicyChecker:
         object_path: str | None,
         access_type: str,
     ) -> tuple[bool, bool, int]:
+        print("HERE", bucket, object_path, access_type, user, user_groups)
         """
         Check if user has access based on policies.
 

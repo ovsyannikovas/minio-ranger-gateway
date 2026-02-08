@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 import time
 
 import requests
@@ -6,6 +7,8 @@ from requests.auth import HTTPBasicAuth
 
 ranger_url = 'http://ranger-admin:6080'
 auth = HTTPBasicAuth('admin', 'rangerR0cks!')
+
+logger = logging.getLogger(__name__)
 
 
 def wait_for_ranger():
@@ -30,6 +33,8 @@ def wait_for_ranger():
 
 def init_ranger():
     """Initialize Ranger with service definitions and policies"""
+
+    print("Init ranger started")
 
     base_url = f"{ranger_url}/service/public/v2/api"
 
@@ -80,6 +85,9 @@ def init_ranger():
         "isEnabled": True
     }
 
+    user2_id = None
+    group_id = None
+
     # Make API calls with retry logic
     for endpoint, data, _description in [
         (f"{base_url}/servicedef", service_def, "service definition"),
@@ -89,16 +97,38 @@ def init_ranger():
             "configs": {"minioEndpoint": "http://minio:9000"},
             "description": "MinIO authorization policies"
         }, "service"),
-        (f"{ranger_url}/service/xusers/users", {
+        (f"{ranger_url}/service/xusers/secure/users", {
             "name": "user1",
             "firstName": "User",
             "lastName": "One",
             "password": "rangerR0cks!",
             "userRoleList": ["ROLE_USER"],
             "status": 1,
-        }, "user"),
+        }, "user1"),
+        (f"{ranger_url}/service/xusers/secure/users", {
+            "name": "user2",
+            "firstName": "User",
+            "lastName": "Two",
+            "password": "rangerR0cks!",
+            "userRoleList": ["ROLE_USER"],
+            "status": 1,
+        }, "user2"),
+        (f"{ranger_url}/service/xusers/secure/users", {
+            "name": "user3",
+            "firstName": "User",
+            "lastName": "Three",
+            "password": "rangerR0cks!",
+            "userRoleList": ["ROLE_USER"],
+            "status": 1,
+        }, "user3"),
+        (f"{ranger_url}/service/xusers/groups", {
+            "name": "analytics",
+        }, "group"),
+        (f"{ranger_url}/service/xusers/groupusers", {
+            "name": "analytics",
+        }, "groupusers"),
         (f"{base_url}/policy", {
-            "name": "minio-bucket-policy0",
+            "name": "minio-bucket-policy1",
             "description": "Access to entire bucket",
             "service": "minio-service",
             "isEnabled": True,
@@ -107,27 +137,55 @@ def init_ranger():
             },
             "policyItems": [
                 {
+                    "groups": ["analytics"],
+                    "accesses": [
+                        {"type": "list", "isAllowed": True}
+                    ]
+                }
+            ]
+        }, "policy1"),
+        (f"{base_url}/policy", {
+            "name": "minio-bucket-policy2",
+            "description": "Access to entire bucket",
+            "service": "minio-service",
+            "isEnabled": True,
+            "resources": {
+                "object": {"values": ["analytics/file.txt"], "isExcludes": False, "isRecursive": False}
+            },
+            "policyItems": [
+                {
                     "users": ["user1"],
                     "accesses": [
                         {"type": "read", "isAllowed": True}
                     ]
-                },
-                {
-                    "users": ["user2"],
-                    "accesses": [
-                        {"type": "list", "isAllowed": True}
-                    ]
-                },
+                }
             ]
-        }, "policy")
+        }, "policy2")
     ]:
         max_retries = 5
+
+        if user2_id and _description == "groupusers":
+            data["userId"] = user2_id
+
+        if group_id and _description == "groupusers":
+            data["parentGroupId"] = group_id
+
         for attempt in range(max_retries):
+            logger.info(f"Attempt {attempt + 1}/{max_retries} for {_description}")
             try:
                 response = requests.post(f"{endpoint}", auth=auth, json=data, headers=headers, timeout=10)
+                print(f"Response status code: {response.status_code}")
                 if response.status_code in [200, 201]:
+                    print(f"✓ Successfully created {_description}: {response.status_code}")
+                    print(f"Response: {response.text[:200]}...")
+                    response_json = response.json()
+                    if _description == "user2":
+                        user2_id = response_json["id"]
+                    if _description == "group":
+                        group_id = response_json["id"]
                     break
                 elif response.status_code in [400, 404]:
+                    print(f"Response: {response.text[:200]}...")
                     break
                 else:
                     pass

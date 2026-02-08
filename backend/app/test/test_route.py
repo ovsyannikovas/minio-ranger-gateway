@@ -8,9 +8,9 @@ import boto3
 from botocore.client import Config
 
 # Конфигурация
-MINIO_ENDPOINT = "http://127.0.0.1:9000"  # Адрес вашего gateway
-AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "a5wxm8as2anLuyDGYLnu")
-AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "TBowo7jHC9mmmVr6vAbLhmQrVWdI4fuU0c9ezvgo")
+MINIO_ENDPOINT = "http://minio:9000"
+AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 REGION = "us-east-1"
 
 # Глобальные метрики
@@ -48,7 +48,7 @@ def print_metrics():
             print(f"  ... и еще {len(metrics['errors']) - 5} ошибок")
 
 
-def update_metrics(request_type: str, duration: float, success: bool, error: str = None):
+def update_metrics(request_type: str, duration: float, success: bool, error: str = None, details: str = None):
     """Обновление метрик"""
     metrics['total_requests'] += 1
     metrics['total_time'] += duration
@@ -58,7 +58,12 @@ def update_metrics(request_type: str, duration: float, success: bool, error: str
     else:
         metrics['failed_requests'] += 1
         if error:
-            metrics['errors'].append(f"{request_type}: {error}")
+            # Добавляем details для различения вызовов
+            error_msg = f"{request_type}"
+            if details:
+                error_msg += f" ({details})"
+            error_msg += f": {error}"
+            metrics['errors'].append(error_msg)
 
     if request_type in metrics['requests_by_type']:
         metrics['requests_by_type'][request_type] += 1
@@ -147,12 +152,12 @@ def get_object(bucket_name, object_key):
         print(f"  Тип контента: {response.get('ContentType', 'не указан')}")
         print(f"  Содержимое: {data.decode('utf-8')[:100]}{'...' if len(data) > 100 else ''}")
 
-        update_metrics("get_object", duration, True)
+        update_metrics("get_object", duration, True, details=f"{bucket_name}/{object_key}")
         return data
     except Exception as e:
         duration = time.time() - start_time
         print(f"\n✗ ОШИБКА при получении объекта '{object_key}' [{duration:.3f} сек]: {e}")
-        update_metrics("get_object", duration, False, str(e))
+        update_metrics("get_object", duration, False, str(e), details=f"{bucket_name}/{object_key}")
         return None
 
 
@@ -291,30 +296,30 @@ if __name__ == "__main__":
         print("\n1. Получение списка бакетов...")
         resp = list_buckets()
 
-        # 2. Создание бакета (если нужно)
-        test_bucket = "analytics"
-        print(f"\n2. Создание бакета '{test_bucket}'...")
-        resp = create_bucket(test_bucket)
-
-        # 3. Загрузка объекта
-        print(f"\n3. Загрузка тестового объекта в бакет '{test_bucket}'...")
-        put_object(test_bucket, "test-object.txt", b"Hello from boto3 client!")
-
-        # 4. Получение объекта
-        print(f"\n4. Получение объекта 'test-object.txt' из бакета '{test_bucket}'...")
-        data = get_object(test_bucket, "test-object.txt")
-
-        # 5. Попытка получить несуществующий объект
-        print(f"\n5. Попытка получить несуществующий объект 'file.txt'...")
-        get_object(test_bucket, "file.txt")
-
-        # 6. Список объектов в бакете
-        print(f"\n6. Получение списка объектов в бакете '{test_bucket}'...")
-        list_objects(test_bucket)
-
-        # 7. Еще раз список бакетов
-        print("\n7. Финальный список бакетов...")
-        list_buckets()
+        # # 2. Создание бакета (если нужно)
+        # test_bucket = "analytics"
+        # print(f"\n2. Создание бакета '{test_bucket}'...")
+        # resp = create_bucket(test_bucket)
+        #
+        # # 3. Загрузка объекта
+        # print(f"\n3. Загрузка тестового объекта в бакет '{test_bucket}'...")
+        # put_object(test_bucket, "test-object.txt", b"Hello from boto3 client!")
+        #
+        # # 4. Получение объекта
+        # print(f"\n4. Получение объекта 'file.txt' из бакета '{test_bucket}'...")
+        # data = get_object(test_bucket, "file.txt")
+        #
+        # # 5. Попытка получить несуществующий объект
+        # print(f"\n5. Попытка получить несуществующий объект 'file2.txt'...")
+        # get_object(test_bucket, "file2.txt")
+        #
+        # # 6. Список объектов в бакете
+        # print(f"\n6. Получение списка объектов в бакете '{test_bucket}'...")
+        # list_objects(test_bucket)
+        #
+        # # 7. Еще раз список бакетов
+        # print("\n7. Финальный список бакетов...")
+        # list_buckets()
 
         # 8. Дополнительный тест производительности (опционально)
         if len(sys.argv) > 1 and sys.argv[1] == "--perf":

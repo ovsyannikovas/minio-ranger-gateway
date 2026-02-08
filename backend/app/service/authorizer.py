@@ -56,10 +56,6 @@ S3_READ_ACTIONS = [
     's3:GetBucketWebsite',
     's3:GetLifecycleConfiguration',
     's3:GetReplicationConfiguration',
-    's3:ListBucket',
-    's3:ListBucketVersions',
-    's3:ListAllMyBuckets',
-    's3:ListMultipartUploadParts',
 ]
 
 S3_LIST_ACTIONS = [
@@ -68,6 +64,11 @@ S3_LIST_ACTIONS = [
     's3:ListAllMyBuckets',
     's3:ListMultipartUploadParts',
     's3:ListBucketMultipartUploads',
+    's3:ListObjectsV2',
+    's3:ListBucket',
+    's3:ListBucketVersions',
+    's3:ListAllMyBuckets',
+    's3:ListMultipartUploadParts',
 ]
 
 S3_WRITE_ACTIONS = [

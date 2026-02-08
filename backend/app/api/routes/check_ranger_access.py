@@ -58,12 +58,12 @@ async def check_ranger_access(
     start_time = time.time()
     timings = {}  # Словарь для хранения времени выполнения этапов
 
-    client_ip = request.client.host
-    if not is_ip_allowed(client_ip):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Access denied from IP {client_ip}. IP is not in whitelist."
-        )
+    # client_ip = request.client.host
+    # if not is_ip_allowed(client_ip):
+    #     raise HTTPException(
+    #         status_code=403,
+    #         detail=f"Access denied from IP {client_ip}. IP is not in whitelist."
+    #     )
 
     try:
         # Этап 1: Извлечение метаданных
